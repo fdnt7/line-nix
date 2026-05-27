@@ -1,0 +1,163 @@
+name: Build LINE snapshot
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: build-snapshot
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Prefetch LINE installer stub
+        id: stub
+        run: |
+          set -euo pipefail
+          out=$(nix-prefetch-url --print-path --type sha256 \
+                 https://desktop.line-scdn.net/win/new/LineInst.exe)
+          installer=$(printf '%s\n' "$out" | tail -n1)
+          echo "installer=$installer" >> "$GITHUB_OUTPUT"
+          echo "Stub at $installer"
+
+      - name: Install LINE with plain wine (silent)
+        env:
+          INSTALLER: ${{ steps.stub.outputs.installer }}
+        run: |
+          set -euo pipefail
+          mkdir -p wp
+          export WINEPREFIX="$PWD/wp"
+          # Do not set WINEARCH — let pkgs.wine pick its native default.
+          export WINEDLLOVERRIDES="mscoree,mshtml="
+          export WINEDEBUG=-all
+
+          nix shell nixpkgs#wine nixpkgs#xvfb-run nixpkgs#findutils \
+            --command bash -euxo pipefail <<INNER
+              xvfb-run -a wineboot --init
+              xvfb-run -a wine "\$INSTALLER" /S || true
+              # /S returns immediately on NSIS; poll for the stable entry point.
+              for i in \$(seq 1 90); do
+                if find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
+                     -type f 2>/dev/null | grep -q .; then break; fi
+                sleep 1
+              done
+              wineserver -w || true
+          INNER
+
+          if ! find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
+               -type f 2>/dev/null | grep -q .; then
+            echo "::error::LineLauncher.exe never appeared — install failed"
+            find wp/drive_c -maxdepth 6 -type d -name LINE || true
+            exit 1
+          fi
+          echo "Install OK"
+
+      - name: Scrub prefix for determinism
+        run: |
+          set -euo pipefail
+          for f in wp/system.reg wp/user.reg wp/userdef.reg; do
+            [ -f "$f" ] || continue
+            sed -i 's/^#time=.*$/#time=0/' "$f"
+          done
+          rm -rf wp/drive_c/users/runner/Temp \
+                 wp/drive_c/windows/Temp \
+                 wp/.update-timestamp 2>/dev/null || true
+
+      - name: Build deterministic tarball
+        id: snap
+        run: |
+          set -euo pipefail
+          # Defensive: normalise the user dir to `runner` even though CI
+          # already runs as runner — keeps the snapshot launcher's
+          # SNAPSHOT_USER=runner invariant true regardless of where the
+          # snapshot was built.
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' \
+              --transform "s|drive_c/users/$(whoami)|drive_c/users/runner|g" \
+              --use-compress-program='zstd -19 --threads=0' \
+              -cf line-snapshot.tar.zst \
+              -C wp .
+          ls -lh line-snapshot.tar.zst
+          hash=$(nix hash file --type sha256 --sri line-snapshot.tar.zst)
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+
+      - name: Compare to current pin
+        id: cmp
+        run: |
+          set -euo pipefail
+          current=$(jq -r '.hash // "null"' nix/snapshot-pin.json)
+          new='${{ steps.snap.outputs.hash }}'
+          if [ "$current" = "$new" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "no change"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "changed: $current -> $new"
+          fi
+
+      - name: Create GitHub release
+        if: steps.cmp.outputs.changed == 'true'
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SNAP_HASH: ${{ steps.snap.outputs.hash }}
+        run: |
+          set -euo pipefail
+          tag="snapshot-$(date -u +%Y%m%d-%H%M%S)"
+          gh release create "$tag" line-snapshot.tar.zst \
+            --title "LINE snapshot $tag" \
+            --notes "Automated snapshot built with plain pkgs.wine, silent install, no winetricks.
+
+          Hash: \`$SNAP_HASH\`"
+          url="${{ github.server_url }}/${{ github.repository }}/releases/download/$tag/line-snapshot.tar.zst"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Update pin
+        if: steps.cmp.outputs.changed == 'true'
+        env:
+          URL: ${{ steps.release.outputs.url }}
+          HASH: ${{ steps.snap.outputs.hash }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg url        "$URL" \
+            --arg hash       "$HASH" \
+            --arg capturedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              url: $url,
+              hash: $hash,
+              capturedAt: $capturedAt
+            }' > nix/snapshot-pin.json
+
+      - name: Open PR
+        if: steps.cmp.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: bump LINE snapshot to ${{ steps.release.outputs.tag }}"
+          title: "chore: bump LINE snapshot (${{ steps.release.outputs.tag }})"
+          body: |
+            Automated snapshot bump (plain pkgs.wine, no winetricks).
+
+            - **Hash:** `${{ steps.snap.outputs.hash }}`
+            - **Release:** ${{ steps.release.outputs.url }}
+          branch: auto/snapshot-bump
+          delete-branch: true
+          labels: automated

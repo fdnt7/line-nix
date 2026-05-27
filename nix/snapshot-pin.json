@@ -1,0 +1,6 @@
+{
+  "path": "/tmp/line-snapshot.tar.zst",
+  "hash": "sha256-qOzxoqkxcA0dB3wRu+OY9tUmiOnYltECpKT4VCR41nw=",
+  "capturedAt": "2026-05-20T15:13:00Z",
+  "_comment": "TEMPORARY local-path pin from clean hands-off install (EULA already accepted, scrubbed). CI will replace with a { url, hash } pin on the next auto-bump."
+}
