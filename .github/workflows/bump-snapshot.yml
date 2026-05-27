@@ -1,11 +1,8 @@
 name: Build LINE snapshot
 
 on:
-  # Cron stays disabled until at least one manual `workflow_dispatch`
-  # run confirms the xdotool click-through actually advances LINE's
-  # EULA + Install modals. Once green, uncomment the schedule.
-  # schedule:
-  #   - cron: "0 0 * * *"
+  schedule:
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:
