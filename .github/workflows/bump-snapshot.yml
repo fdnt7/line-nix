@@ -1,10 +1,9 @@
 name: Build LINE snapshot
 
 on:
-  # Cron disabled: LineInst.exe shows an interactive EULA + Install prompt
-  # that /S does not skip, so an unattended `wine LineInst.exe` hangs.
-  # Re-enable once the install step has xdotool/ydotool click-through
-  # (or an equivalent silent path is found).
+  # Cron stays disabled until at least one manual `workflow_dispatch`
+  # run confirms the xdotool click-through actually advances LINE's
+  # EULA + Install modals. Once green, uncomment the schedule.
   # schedule:
   #   - cron: "0 0 * * *"
   workflow_dispatch:
@@ -42,29 +41,66 @@ jobs:
           echo "installer=$installer" >> "$GITHUB_OUTPUT"
           echo "Stub at $installer"
 
-      - name: Install LINE with plain wine (silent)
+      - name: Install LINE (xvfb + xdotool click-through)
         env:
           INSTALLER: ${{ steps.stub.outputs.installer }}
         run: |
           set -euo pipefail
-          mkdir -p wp
+          mkdir -p wp shots
           export WINEPREFIX="$PWD/wp"
           # Do not set WINEARCH — let pkgs.wine pick its native default.
           export WINEDLLOVERRIDES="mscoree,mshtml="
           export WINEDEBUG=-all
 
-          nix shell nixpkgs#wine nixpkgs#xvfb-run nixpkgs#findutils \
-            --command bash -euxo pipefail <<INNER
-              xvfb-run -a wineboot --init
-              xvfb-run -a wine "\$INSTALLER" /S || true
-              # /S returns immediately on NSIS; poll for the stable entry point.
-              for i in \$(seq 1 90); do
-                if find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
-                     -type f 2>/dev/null | grep -q .; then break; fi
-                sleep 1
-              done
-              wineserver -w || true
-          INNER
+          # LineInst.exe is a custom installer (not NSIS) with two
+          # sequential modal prompts (EULA + Install). /S does not
+          # bypass them. We run under a virtual X server and drive
+          # them with xdotool: poll every 2s, send Return to the
+          # focused wine window. If the default-focused button is the
+          # right one (Agree → Install), this advances both. We bail
+          # as soon as LineLauncher.exe appears on disk, then kill the
+          # auto-launched LINE so wineserver can shut down cleanly.
+          # Screenshots are captured every 5s for diagnosis if the
+          # install hangs.
+          nix shell \
+              nixpkgs#wine \
+              nixpkgs#xvfb-run \
+              nixpkgs#xdotool \
+              nixpkgs#findutils \
+              nixpkgs#procps \
+              nixpkgs#imagemagick \
+            --command xvfb-run -a -s "-screen 0 1280x1024x24" \
+              bash -euxo pipefail -c '
+                wineboot --init
+
+                wine "$INSTALLER" &
+
+                for i in $(seq 1 90); do
+                  if find wp/drive_c -ipath "*/LINE/bin/LineLauncher.exe" \
+                       -type f 2>/dev/null | grep -q .; then
+                    echo "LineLauncher.exe present after ${i}s"
+                    break
+                  fi
+                  if [ $((i % 5)) -eq 0 ]; then
+                    import -window root "shots/install-$(printf %03d "$i").png" \
+                      2>/dev/null || true
+                  fi
+                  # Send to any wine window we can find; fall back to
+                  # the focused window if none is found by name.
+                  wid=$(xdotool search --name "LINE" 2>/dev/null | head -1 || true)
+                  if [ -n "$wid" ]; then
+                    xdotool windowactivate "$wid" 2>/dev/null || true
+                    xdotool key --window "$wid" Return 2>/dev/null || true
+                  else
+                    xdotool key Return 2>/dev/null || true
+                  fi
+                  sleep 2
+                done
+
+                pkill -f LineLauncher.exe 2>/dev/null || true
+                pkill -f LINE.exe 2>/dev/null || true
+                wineserver -w || true
+              '
 
           if ! find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
                -type f 2>/dev/null | grep -q .; then
@@ -73,6 +109,14 @@ jobs:
             exit 1
           fi
           echo "Install OK"
+
+      - name: Upload install screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-screenshots
+          path: shots/
+          if-no-files-found: ignore
 
       - name: Scrub prefix for determinism
         run: |
