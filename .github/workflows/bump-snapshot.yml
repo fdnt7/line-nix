@@ -231,6 +231,10 @@ jobs:
 
             - **Hash:** `${{ steps.snap.outputs.hash }}`
             - **Release:** ${{ steps.release.outputs.url }}
+          # Limit the auto-bump commit to the pin file. Without this,
+          # create-pull-request stages every dirty path in the working
+          # tree (wine prefix + screenshots + tarball).
+          add-paths: nix/snapshot-pin.json
           branch: auto/snapshot-bump
           delete-branch: true
           labels: automated
