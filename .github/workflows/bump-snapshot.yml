@@ -143,13 +143,39 @@ jobs:
       - name: Scrub prefix for determinism
         run: |
           set -euo pipefail
+
+          # Registry: zero both per-key `#time=<hex>` lines and the
+          # per-section unix timestamps that follow the section header
+          # (`[Path\\To\\Key] 1779869605`). The latter dominates the
+          # diff between two clean installs of the same upstream.
           for f in wp/system.reg wp/user.reg wp/userdef.reg; do
             [ -f "$f" ] || continue
             sed -i 's/^#time=.*$/#time=0/' "$f"
+            sed -i -E 's/^(\[[^]]*\]) [0-9]+$/\1 0/' "$f"
           done
+
+          # Wine-created host-integration files. The launcher exec's
+          # LineLauncher.exe directly so none of these are used. They
+          # carry random GUIDs / per-host paths.
+          rm -rf "wp/drive_c/users/runner/AppData/Roaming/Microsoft/Windows/Start Menu/LINE.lnk" \
+                 "wp/drive_c/users/runner/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/LINE" \
+                 "wp/drive_c/users/runner/Desktop" \
+                 2>/dev/null || true
+
+          # NSIS leftover temp files (LineInst_<pid>.exe, ns<rand>.tmp,
+          # etc.) and other ephemeral dirs.
           rm -rf wp/drive_c/users/runner/Temp \
+                 wp/drive_c/users/runner/AppData/Local/Temp \
                  wp/drive_c/windows/Temp \
                  wp/.update-timestamp 2>/dev/null || true
+
+          # dosdevices: the host runner enumerates a variable set of
+          # com*/lpt* symlinks. Keep only the stable two wine cares
+          # about for our use case: c: and z:.
+          if [ -d wp/dosdevices ]; then
+            find wp/dosdevices -mindepth 1 -maxdepth 1 \
+              ! -name 'c:' ! -name 'z:' -exec rm -rf {} +
+          fi
 
       - name: Build deterministic tarball
         id: snap
