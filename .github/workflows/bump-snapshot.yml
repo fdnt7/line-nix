@@ -26,7 +26,11 @@ jobs:
             experimental-features = nix-command flakes
             accept-flake-config = true
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      # No magic-nix-cache: this workflow never builds a derivation,
+      # it only `nix shell`s pre-built binaries (wine, xdotool, …)
+      # straight from cache.nixos.org. There is nothing repo-local
+      # to cache, and the post-run upload step was adding ~12 min
+      # per run for zero benefit.
 
       - name: Prefetch LINE installer stub
         id: stub
@@ -172,6 +176,14 @@ jobs:
               s/^"Domain"=".*"$/"Domain"="line-nix.localdomain"/
             ' "$f"
             sed -i 's|^"LOGONSERVER"=".*"$|"LOGONSERVER"="\\\\\\\\LINE-NIX"|' "$f"
+
+            # Wine writes Linux-side menu integration entries
+            # (`\\?\unix\home\…\menus\…` and `\\?\Z:\home\…\applications\…`)
+            # when it lays down .desktop/.menu files on the host.
+            # Whether it writes them is host-state-dependent. Drop
+            # them — the corresponding host files are removed below
+            # anyway, so the registry pointers are dead.
+            sed -i -E '/^"\\\\\\\\\?\\\\(unix|Z:)\\\\/d' "$f"
           done
 
           # Wine-created host-integration files. The launcher exec's
