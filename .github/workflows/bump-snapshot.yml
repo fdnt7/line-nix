@@ -144,14 +144,34 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Registry: zero both per-key `#time=<hex>` lines and the
-          # per-section unix timestamps that follow the section header
-          # (`[Path\\To\\Key] 1779869605`). The latter dominates the
-          # diff between two clean installs of the same upstream.
+          # Registry scrub:
+          #   - zero per-key `#time=<hex>` lines and per-section unix
+          #     timestamps after section headers
+          #     (`[Path\\To\\Key] 1779869605`)
+          #   - drop wine's conditional `"SymbolicLinkValue"=hex(6):…`
+          #     multi-line REG_LINK (written sometimes during display
+          #     class enumeration; not always)
+          #   - normalise host-identity values that vary per CI runner:
+          #     MachineGuid, ComputerName, USERDOMAIN, LOGONSERVER,
+          #     CPU identity, hardware ContainerId / VideoID GUIDs,
+          #     and the runner's cloudapp DNS name.
           for f in wp/system.reg wp/user.reg wp/userdef.reg; do
             [ -f "$f" ] || continue
             sed -i 's/^#time=.*$/#time=0/' "$f"
             sed -i -E 's/^(\[[^]]*\]) [0-9]+$/\1 0/' "$f"
+            sed -i -E '/^"SymbolicLinkValue"=hex/,/[^\\]$/d' "$f"
+            sed -i -E '
+              s/^"MachineGuid"="[0-9a-f-]+"$/"MachineGuid"="00000000-0000-0000-0000-000000000000"/
+              s/^"ComputerName"=".*"$/"ComputerName"="LINE-NIX"/
+              s/^"USERDOMAIN"=".*"$/"USERDOMAIN"="LINE-NIX"/
+              s/^"PROCESSOR_IDENTIFIER"=".*"$/"PROCESSOR_IDENTIFIER"="LINE-NIX"/
+              s/^"PROCESSOR_REVISION"="[0-9a-f]+"$/"PROCESSOR_REVISION"="0000"/
+              s/^"ContainerId"="\{[0-9A-F-]+\}"$/"ContainerId"="{00000000-0000-0000-0000-000000000000}"/
+              s/^"VideoID"="\{[0-9a-f-]+\}"$/"VideoID"="{00000000-0000-0000-0000-000000000000}"/
+              s/^"Hostname"=".*"$/"Hostname"="line-nix"/
+              s/^"Domain"=".*"$/"Domain"="line-nix.localdomain"/
+            ' "$f"
+            sed -i 's|^"LOGONSERVER"=".*"$|"LOGONSERVER"="\\\\\\\\LINE-NIX"|' "$f"
           done
 
           # Wine-created host-integration files. The launcher exec's
