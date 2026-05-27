@@ -21,28 +21,35 @@
         system: treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix
       );
     in
-    forAllSystems (
-      system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "line-messenger" ];
-        };
-        line-messenger = pkgs.callPackage ./nix/package.nix { };
-      in
-      {
-        packages = {
-          default = line-messenger;
-          line-messenger = line-messenger;
-        };
+    let
+      perSystem = forAllSystems (
+        system:
+        let
+          pkgs = import nixpkgs {
+            inherit system;
+            config.allowUnfreePredicate = pkg: builtins.elem (nixpkgs.lib.getName pkg) [ "line-messenger" ];
+          };
+          line-messenger = pkgs.callPackage ./nix/package.nix { };
+        in
+        {
+          inherit line-messenger;
+          inherit pkgs;
+        }
+      );
+    in
+    {
+      packages = forAllSystems (system: {
+        default = perSystem.${system}.line-messenger;
+        line-messenger = perSystem.${system}.line-messenger;
+      });
 
-        apps.default = {
+      apps = forAllSystems (system: {
+        default = {
           type = "app";
-          program = "${line-messenger}/bin/line";
+          program = "${perSystem.${system}.line-messenger}/bin/line";
         };
-      }
-    )
-    // {
+      });
+
       homeManagerModules.default = import ./nix/hm-module.nix self;
       homeManagerModules.line-messenger = self.homeManagerModules.default;
 

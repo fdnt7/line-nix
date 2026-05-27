@@ -1,6 +1,5 @@
 {
-  "path": "/tmp/line-snapshot.tar.zst",
-  "hash": "sha256-qOzxoqkxcA0dB3wRu+OY9tUmiOnYltECpKT4VCR41nw=",
-  "capturedAt": "2026-05-20T15:13:00Z",
-  "_comment": "TEMPORARY local-path pin from clean hands-off install (EULA already accepted, scrubbed). CI will replace with a { url, hash } pin on the next auto-bump."
+  "url": "https://github.com/fdnt7/line-nix/releases/download/snapshot-20260527-073322/line-snapshot.tar.zst",
+  "hash": "sha256-YTQL5nq/ViIQUVERQzecoFNems3zDur4+A7+hWh5vcY=",
+  "capturedAt": "2026-05-27T07:33:22Z"
 }
