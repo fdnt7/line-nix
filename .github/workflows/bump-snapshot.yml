@@ -184,6 +184,17 @@ jobs:
             # them — the corresponding host files are removed below
             # anyway, so the registry pointers are dead.
             sed -i -E '/^"\\\\\\\\\?\\\\(unix|Z:)\\\\/d' "$f"
+
+            # Drop the entire wine device-enumeration subtree
+            # (`[System\\ControlSet001\\Enum\\...]`). It mirrors host
+            # hardware (display, PCI, monitor properties) and varies
+            # per CI runner. LINE never reads it, and wine will
+            # re-populate any entries it needs at user runtime.
+            awk '
+              /^\[System\\\\ControlSet001\\\\Enum\\\\/ { skip=1; next }
+              /^\[/                                   { skip=0 }
+              !skip
+            ' "$f" > "$f.new" && mv "$f.new" "$f"
           done
 
           # Wine-created host-integration files. The launcher exec's
