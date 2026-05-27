@@ -52,54 +52,79 @@ jobs:
           export WINEDLLOVERRIDES="mscoree,mshtml="
           export WINEDEBUG=-all
 
-          # LineInst.exe is a custom installer (not NSIS) with two
-          # sequential modal prompts (EULA + Install). /S does not
-          # bypass them. We run under a virtual X server and drive
-          # them with xdotool: poll every 2s, send Return to the
-          # focused wine window. If the default-focused button is the
-          # right one (Agree → Install), this advances both. We bail
-          # as soon as LineLauncher.exe appears on disk, then kill the
-          # auto-launched LINE so wineserver can shut down cleanly.
-          # Screenshots are captured every 5s for diagnosis if the
-          # install hangs.
+          # LineInst.exe is a custom installer (not NSIS) with a
+          # single modal screen: a checkbox ("I agree to the LY
+          # Corporation Common Terms of Use") and a green Install
+          # button. /S does not bypass it; the default focus is on
+          # the checkbox, so sending Return just toggles it. We
+          # therefore mouse-click both elements at their observed
+          # positions within the wine window. Screenshots are
+          # captured around each click for diagnosis.
+          #
+          # After Install is clicked, LINE auto-launches. We use
+          # `wineserver -k` (not pkill -f, which would match our own
+          # script's cmdline) for a clean shutdown.
           nix shell \
               nixpkgs#wine \
               nixpkgs#xvfb-run \
               nixpkgs#xdotool \
               nixpkgs#findutils \
-              nixpkgs#procps \
               nixpkgs#imagemagick \
             --command xvfb-run -a -s "-screen 0 1280x1024x24" \
               bash -euxo pipefail -c '
                 wineboot --init
-
                 wine "$INSTALLER" &
 
-                for i in $(seq 1 90); do
-                  if find wp/drive_c -ipath "*/LINE/bin/LineLauncher.exe" \
-                       -type f 2>/dev/null | grep -q .; then
-                    echo "LineLauncher.exe present after ${i}s"
+                # Wait for the installer window.
+                for i in $(seq 1 30); do
+                  if xdotool search --name "LINE" >/dev/null 2>&1; then
+                    echo "installer window present after ${i}s"
                     break
                   fi
-                  if [ $((i % 5)) -eq 0 ]; then
-                    import -window root "shots/install-$(printf %03d "$i").png" \
+                  sleep 1
+                done
+                sleep 3
+                import -window root shots/00-window-up.png 2>/dev/null || true
+
+                wid=$(xdotool search --name "LINE" | head -1)
+                xdotool windowactivate --sync "$wid" 2>/dev/null || true
+                eval "$(xdotool getwindowgeometry --shell "$wid")"
+                echo "window geometry: X=$X Y=$Y W=$WIDTH H=$HEIGHT"
+
+                # Checkbox at ~8% from left, ~89% from top of the
+                # modal. Install button centre at ~84% / ~87%.
+                cb_x=$((X + WIDTH * 8 / 100))
+                cb_y=$((Y + HEIGHT * 89 / 100))
+                btn_x=$((X + WIDTH * 84 / 100))
+                btn_y=$((Y + HEIGHT * 87 / 100))
+
+                xdotool mousemove --sync "$cb_x" "$cb_y"
+                xdotool click 1
+                sleep 1
+                import -window root shots/01-after-checkbox.png 2>/dev/null || true
+
+                xdotool mousemove --sync "$btn_x" "$btn_y"
+                xdotool click 1
+                sleep 2
+                import -window root shots/02-after-install.png 2>/dev/null || true
+
+                # Poll for LineLauncher.exe with a generous timeout
+                # to cover CDN download speed variability.
+                for i in $(seq 1 180); do
+                  if find wp/drive_c -ipath "*/LINE/bin/LineLauncher.exe" \
+                       -type f 2>/dev/null | grep -q .; then
+                    echo "LineLauncher.exe present after install click + ${i}s"
+                    break
+                  fi
+                  if [ $((i % 15)) -eq 0 ]; then
+                    import -window root "shots/wait-$(printf %03d "$i").png" \
                       2>/dev/null || true
                   fi
-                  # Send to any wine window we can find; fall back to
-                  # the focused window if none is found by name.
-                  wid=$(xdotool search --name "LINE" 2>/dev/null | head -1 || true)
-                  if [ -n "$wid" ]; then
-                    xdotool windowactivate "$wid" 2>/dev/null || true
-                    xdotool key --window "$wid" Return 2>/dev/null || true
-                  else
-                    xdotool key Return 2>/dev/null || true
-                  fi
-                  sleep 2
+                  sleep 1
                 done
 
-                pkill -f LineLauncher.exe 2>/dev/null || true
-                pkill -f LINE.exe 2>/dev/null || true
-                wineserver -w || true
+                import -window root shots/03-final.png 2>/dev/null || true
+                wineserver -k || true
               '
 
           if ! find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
