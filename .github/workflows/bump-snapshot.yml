@@ -162,9 +162,11 @@ jobs:
           #   - zero per-key `#time=<hex>` lines and per-section unix
           #     timestamps after section headers
           #     (`[Path\\To\\Key] 1779869605`)
-          #   - drop wine's conditional `"SymbolicLinkValue"=hex(6):…`
-          #     multi-line REG_LINK (written sometimes during display
-          #     class enumeration; not always)
+          #   - drop the non-deterministic display-class
+          #     `"SymbolicLinkValue"=hex(6):…` (a value inside the GPU
+          #     `Control\\Class\\{4D36E968-…}` key that points at the
+          #     per-runner device instance) — but ONLY when it is a
+          #     value in a normal key, NEVER a `#link` REG_LINK target
           #   - normalise host-identity values that vary per CI runner:
           #     MachineGuid, ComputerName, USERDOMAIN, LOGONSERVER,
           #     CPU identity, hardware ContainerId / VideoID GUIDs,
@@ -173,7 +175,21 @@ jobs:
             [ -f "$f" ] || continue
             sed -i 's/^#time=.*$/#time=0/' "$f"
             sed -i -E 's/^(\[[^]]*\]) [0-9]+$/\1 0/' "$f"
-            sed -i -E '/^"SymbolicLinkValue"=hex/,/[^\\]$/d' "$f"
+            # Drop SymbolicLinkValue ONLY from normal keys (the GPU
+            # display-class device pointer, which varies per runner).
+            # NEVER touch one in a `#link` section: those are wine's
+            # structural registry symlinks. Deleting the
+            # `System\\CurrentControlSet -> ControlSet001` link leaves
+            # the loader unable to resolve CurrentControlSet, so every
+            # process dies at loader_init with STATUS_STACK_OVERFLOW
+            # and LINE never starts.
+            awk '
+              { if (cont) { if ($0 !~ /\\$/) cont=0; next }
+                if ($0 ~ /^\[/)    { inlink=0; print; next }
+                if ($0 ~ /^#link/) { inlink=1; print; next }
+                if ($0 ~ /^"SymbolicLinkValue"=hex/ && !inlink) { if ($0 ~ /\\$/) cont=1; next }
+                print }
+            ' "$f" > "$f.new" && mv "$f.new" "$f"
             sed -i -E '
               s/^"MachineGuid"="[0-9a-f-]+"$/"MachineGuid"="00000000-0000-0000-0000-000000000000"/
               s/^"ComputerName"=".*"$/"ComputerName"="LINE-NIX"/
