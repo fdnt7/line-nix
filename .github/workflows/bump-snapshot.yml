@@ -65,8 +65,18 @@ jobs:
           # After Install is clicked, LINE auto-launches. We use
           # `wineserver -k` (not pkill -f, which would match our own
           # script's cmdline) for a clean shutdown.
+          #
+          # wine MUST come from this flake (`.#line-messenger.wine`,
+          # the package's passthru), NOT `nixpkgs#wine` from the
+          # runner registry. The prefix baked here is loaded at user
+          # runtime by the launcher's wine, which is the flake's
+          # locked `pkgs.wine`. A registry wine is unpinned and drifts
+          # from the locked one, producing a prefix that fails the
+          # runtime wine's loader_init (STATUS_STACK_OVERFLOW). The
+          # other tools below don't touch the prefix, so they can stay
+          # on the registry.
           nix shell \
-              nixpkgs#wine \
+              .#line-messenger.wine \
               nixpkgs#xvfb-run \
               nixpkgs#xdotool \
               nixpkgs#findutils \
