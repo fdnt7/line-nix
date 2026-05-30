@@ -27,7 +27,7 @@ jobs:
             accept-flake-config = true
 
       # No magic-nix-cache: this workflow never builds a derivation,
-      # it only `nix shell`s pre-built binaries (wine, xdotool, …)
+      # it only `nix shell`s pre-built binaries (wine, xdotool, ...)
       # straight from cache.nixos.org. There is nothing repo-local
       # to cache, and the post-run upload step was adding ~12 min
       # per run for zero benefit.
@@ -49,7 +49,7 @@ jobs:
           set -euo pipefail
           mkdir -p wp shots
           export WINEPREFIX="$PWD/wp"
-          # Do not set WINEARCH — let pkgs.wine pick its native default.
+          # Do not set WINEARCH -- let pkgs.wine pick its native default.
           export WINEDLLOVERRIDES="mscoree,mshtml="
           export WINEDEBUG=-all
 
@@ -140,7 +140,7 @@ jobs:
 
           if ! find wp/drive_c -ipath '*/LINE/bin/LineLauncher.exe' \
                -type f 2>/dev/null | grep -q .; then
-            echo "::error::LineLauncher.exe never appeared — install failed"
+            echo "::error::LineLauncher.exe never appeared -- install failed"
             find wp/drive_c -maxdepth 6 -type d -name LINE || true
             exit 1
           fi
@@ -163,9 +163,9 @@ jobs:
           #     timestamps after section headers
           #     (`[Path\\To\\Key] 1779869605`)
           #   - drop the non-deterministic display-class
-          #     `"SymbolicLinkValue"=hex(6):…` (a value inside the GPU
-          #     `Control\\Class\\{4D36E968-…}` key that points at the
-          #     per-runner device instance) — but ONLY when it is a
+          #     `"SymbolicLinkValue"=hex(6):...` (a value inside the GPU
+          #     `Control\\Class\\{4D36E968-...}` key that points at the
+          #     per-runner device instance) -- but ONLY when it is a
           #     value in a normal key, NEVER a `#link` REG_LINK target
           #   - normalise host-identity values that vary per CI runner:
           #     MachineGuid, ComputerName, USERDOMAIN, LOGONSERVER,
@@ -202,21 +202,21 @@ jobs:
               s/^"Hostname"=".*"$/"Hostname"="line-nix"/
               s/^"Domain"=".*"$/"Domain"="line-nix.localdomain"/
               # Wine stamps its synthesised display-adapter driver
-              # (the GPU display-class key {4D36E968-…}\\0000) with the
+              # (the GPU display-class key {4D36E968-...}\\0000) with the
               # build date: "DriverDate" as M-D-YYYY and "DriverDateData"
               # as the matching 8-byte FILETIME. These change every day,
               # so an unchanged LINE produces a "new" snapshot on every
-              # cron run. LINE never reads them — zero both.
+              # cron run. LINE never reads them -- zero both.
               s/^"DriverDate"="[0-9]+-[0-9]+-[0-9]+"$/"DriverDate"="0-0-0000"/
               s/^"DriverDateData"=hex:[0-9a-f,]+$/"DriverDateData"=hex:00,00,00,00,00,00,00,00/
             ' "$f"
             sed -i 's|^"LOGONSERVER"=".*"$|"LOGONSERVER"="\\\\\\\\LINE-NIX"|' "$f"
 
             # Wine writes Linux-side menu integration entries
-            # (`\\?\unix\home\…\menus\…` and `\\?\Z:\home\…\applications\…`)
+            # (`\\?\unix\home\...\menus\...` and `\\?\Z:\home\...\applications\...`)
             # when it lays down .desktop/.menu files on the host.
             # Whether it writes them is host-state-dependent. Drop
-            # them — the corresponding host files are removed below
+            # them -- the corresponding host files are removed below
             # anyway, so the registry pointers are dead.
             sed -i -E '/^"\\\\\\\\\?\\\\(unix|Z:)\\\\/d' "$f"
 
@@ -260,7 +260,7 @@ jobs:
         run: |
           set -euo pipefail
           # Defensive: normalise the user dir to `runner` even though CI
-          # already runs as runner — keeps the snapshot launcher's
+          # already runs as runner -- keeps the snapshot launcher's
           # SNAPSHOT_USER=runner invariant true regardless of where the
           # snapshot was built.
           tar --sort=name --owner=0 --group=0 --numeric-owner --mtime='@0' \

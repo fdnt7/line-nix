@@ -1,5 +1,5 @@
 {
-  description = "LINE for Windows on NixOS via Wine — fully declarative, snapshot-based";
+  description = "LINE for Windows on NixOS via Wine -- fully declarative, snapshot-based";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

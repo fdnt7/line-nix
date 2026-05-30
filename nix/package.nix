@@ -9,7 +9,7 @@
   zstd,
   coreutils,
   # Plain `pkgs.wine` (classical wine) is what the LINE installer works with
-  # cleanly. Avoid `wineWow64Packages.*` flavours — they hit signature/runtime
+  # cleanly. Avoid `wineWow64Packages.*` flavours -- they hit signature/runtime
   # issues with LINE in practice. CI must use the SAME wine.
   wine,
 }:

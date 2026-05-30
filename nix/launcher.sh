@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Templated by nix/package.nix.
-#   @SNAPSHOT@       — /nix/store/<hash>-line-snapshot.tar.zst
-#   @SNAPSHOT_HASH@  — SRI hash, used as a versioning stamp
+#   @SNAPSHOT@       -- /nix/store/<hash>-line-snapshot.tar.zst
+#   @SNAPSHOT_HASH@  -- SRI hash, used as a versioning stamp
 #
 # Model: this script does extract-or-update + exec. Nothing else.
 # All install/winetricks/security-check work happens in CI; the snapshot is
@@ -13,14 +13,14 @@ set -euo pipefail
 : "${XDG_DATA_HOME:=$HOME/.local/share}"
 export WINEPREFIX="${LINE_NIX_PREFIX:-${WINEPREFIX:-$XDG_DATA_HOME/line-msgr}}"
 export WINEDEBUG="${WINEDEBUG:-fixme-all,err-all}"
-# Do NOT set WINEARCH — let wine pick its native default (matches what CI
+# Do NOT set WINEARCH -- let wine pick its native default (matches what CI
 # used to build the snapshot). Forcing it causes prefix-arch conflicts.
 
 SNAPSHOT='@SNAPSHOT@'
 SNAPSHOT_HASH='@SNAPSHOT_HASH@'
 
 # The snapshot was built in CI under the `runner` user; on extract we
-# symlink users/$USER → users/runner so wine resolves the current user's
+# symlink users/$USER -> users/runner so wine resolves the current user's
 # profile path to the snapshot's files.
 SNAPSHOT_USER=runner
 
