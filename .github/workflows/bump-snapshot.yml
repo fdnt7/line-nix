@@ -196,10 +196,19 @@ jobs:
               s/^"USERDOMAIN"=".*"$/"USERDOMAIN"="LINE-NIX"/
               s/^"PROCESSOR_IDENTIFIER"=".*"$/"PROCESSOR_IDENTIFIER"="LINE-NIX"/
               s/^"PROCESSOR_REVISION"="[0-9a-f]+"$/"PROCESSOR_REVISION"="0000"/
+              s/^"PROCESSOR_LEVEL"="[0-9]+"$/"PROCESSOR_LEVEL"="0"/
               s/^"ContainerId"="\{[0-9A-F-]+\}"$/"ContainerId"="{00000000-0000-0000-0000-000000000000}"/
               s/^"VideoID"="\{[0-9a-f-]+\}"$/"VideoID"="{00000000-0000-0000-0000-000000000000}"/
               s/^"Hostname"=".*"$/"Hostname"="line-nix"/
               s/^"Domain"=".*"$/"Domain"="line-nix.localdomain"/
+              # Wine stamps its synthesised display-adapter driver
+              # (the GPU display-class key {4D36E968-…}\\0000) with the
+              # build date: "DriverDate" as M-D-YYYY and "DriverDateData"
+              # as the matching 8-byte FILETIME. These change every day,
+              # so an unchanged LINE produces a "new" snapshot on every
+              # cron run. LINE never reads them — zero both.
+              s/^"DriverDate"="[0-9]+-[0-9]+-[0-9]+"$/"DriverDate"="0-0-0000"/
+              s/^"DriverDateData"=hex:[0-9a-f,]+$/"DriverDateData"=hex:00,00,00,00,00,00,00,00/
             ' "$f"
             sed -i 's|^"LOGONSERVER"=".*"$|"LOGONSERVER"="\\\\\\\\LINE-NIX"|' "$f"
 
