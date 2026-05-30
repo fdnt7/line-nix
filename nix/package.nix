@@ -8,6 +8,7 @@
   gnutar,
   zstd,
   coreutils,
+  icoutils,
   # Plain `pkgs.wine` (classical wine) is what the LINE installer works with
   # cleanly. Avoid `wineWow64Packages.*` flavours -- they hit signature/runtime
   # issues with LINE in practice. CI must use the SAME wine.
@@ -66,11 +67,12 @@ let
     );
   };
 
+  # Mirror LINE.exe's own VersionInfo (ProductName / FileDescription =
+  # "LINE"). No editorial Comment / GenericName -- Windows ships neither.
   desktopItem = makeDesktopItem {
     name = "line-messenger";
     desktopName = "LINE";
-    genericName = "Messenger";
-    comment = "LINE messenger (Windows client via Wine)";
+    icon = "line-messenger";
     exec = "line";
     terminal = false;
     categories = [
@@ -95,13 +97,40 @@ stdenvNoCC.mkDerivation {
   dontUnpack = true;
   dontBuild = true;
 
-  nativeBuildInputs = [ copyDesktopItems ];
+  nativeBuildInputs = [
+    copyDesktopItems
+    icoutils
+    gnutar
+    zstd
+  ];
   desktopItems = [ desktopItem ];
 
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
     cp ${launcher}/bin/line $out/bin/line
+
+    # Icon: ships as a Windows resource embedded in LineLauncher.exe (the
+    # snapshot has no standalone .ico/.png). Pull just that one .exe out of
+    # the tarball, extract its group_icon as a multi-resolution .ico, split
+    # per size, and install into hicolor. The LINE bin/ path is stable
+    # across version bumps; bin/<ver>/LINE.exe is not.
+    iconwork=$(mktemp -d)
+    tar --zstd -xf ${snapshot} -C "$iconwork" \
+        ./drive_c/users/runner/AppData/Local/LINE/bin/LineLauncher.exe
+    wrestool -x -t 14 \
+        -o "$iconwork/line.ico" \
+        "$iconwork/drive_c/users/runner/AppData/Local/LINE/bin/LineLauncher.exe"
+    icotool -x -o "$iconwork" "$iconwork/line.ico"
+    for png in "$iconwork"/line_*.png; do
+      # icotool names files <base>_<idx>_<W>x<H>x<bpp>.png
+      dims=''${png##*_}            # WxHxBPP.png
+      size=''${dims%%x*}           # W
+      install -Dm644 "$png" \
+        "$out/share/icons/hicolor/''${size}x''${size}/apps/line-messenger.png"
+    done
+    rm -rf "$iconwork"
+
     runHook postInstall
   '';
 
