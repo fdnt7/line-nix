@@ -67,11 +67,19 @@ let
     );
   };
 
-  # Mirror LINE.exe's own VersionInfo (ProductName / FileDescription =
-  # "LINE"). No editorial Comment / GenericName -- Windows ships neither.
+  # All user-visible strings come from LINE's own copy:
+  #   desktopName = ProductName / FileDescription from LINE.exe VersionInfo
+  #   genericName = LINE's self-classification on line.me ("a messenger app")
+  #   comment     = line.me <meta property="og:title">, verbatim, minus the
+  #                 redundant "LINE" brand prefix (XDG spec says Comment
+  #                 should not duplicate Name). Original separator was the
+  #                 full-width vertical bar; the brand half is dropped so
+  #                 ASCII is preserved without a lossy substitution.
   desktopItem = makeDesktopItem {
     name = "line-messenger";
     desktopName = "LINE";
+    genericName = "Messenger";
+    comment = "always at your side.";
     icon = "line-messenger";
     exec = "line";
     terminal = false;
