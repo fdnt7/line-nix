@@ -70,16 +70,19 @@ let
   # All user-visible strings come from LINE's own copy:
   #   desktopName = ProductName / FileDescription from LINE.exe VersionInfo
   #   genericName = LINE's self-classification on line.me ("a messenger app")
-  #   comment     = line.me <meta property="og:title">, verbatim, minus the
-  #                 redundant "LINE" brand prefix (XDG spec says Comment
-  #                 should not duplicate Name). Original separator was the
-  #                 full-width vertical bar; the brand half is dropped so
-  #                 ASCII is preserved without a lossy substitution.
+  #   comment     = first sentence of the Microsoft Store description for
+  #                 "LINE Desktop" (the PC client's own Store listing,
+  #                 apps.microsoft.com/detail/xpfcc4cd725961), verbatim.
+  #                 This is the most PC-specific copy LINE itself
+  #                 publishes -- it names the capabilities outright
+  #                 (messaging, voice and video calls) rather than the
+  #                 brand-tagline-y "always at your side." that LINE's own
+  #                 site uses uniformly across mobile and desktop.
   desktopItem = makeDesktopItem {
     name = "line-messenger";
     desktopName = "LINE";
     genericName = "Messenger";
-    comment = "always at your side.";
+    comment = "LINE reshapes communication around the globe, letting you enjoy not only messaging but also free voice and video calls wherever you find yourself.";
     icon = "line-messenger";
     exec = "line";
     terminal = false;
