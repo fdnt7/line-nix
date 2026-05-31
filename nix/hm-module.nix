@@ -8,7 +8,7 @@ self:
 
 let
   cfg = config.programs.line-messenger;
-  defaultPkg = self.packages.${pkgs.system}.line-messenger;
+  defaultPkg = self.packages.${pkgs.stdenv.hostPlatform.system}.line-messenger;
 in
 {
   options.programs.line-messenger = {
